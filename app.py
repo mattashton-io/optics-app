@@ -2,8 +2,14 @@ import os
 from flask import Flask, request, render_template, redirect, url_for
 from google.cloud import storage, vision
 import uuid
+import google.generativeai as genai
 
 app = Flask(__name__)
+
+# Configure Gemini API
+# Replace with your actual API key
+genai.configure(api_key=os.environ["YOUR_GEMINI_API_KEY"])
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 # Configure Google Cloud Storage
 # Replace with your actual bucket name
@@ -25,11 +31,8 @@ def index():
             if gcs_path:
                 # Perform OCR
                 extracted_text = detect_text_from_gcs(gcs_path)
-                # Generate a signed URL for displaying the image
-                client = storage.Client()
-                bucket = client.get_bucket(BUCKET_NAME)
-                blob = bucket.blob(gcs_path)
-                return render_template('index.html', extracted_text=extracted_text)
+                stylized_text = stylize_text_with_gemini(extracted_text)
+                return render_template('index.html', extracted_text=stylized_text)
             else:
                 return "Error uploading file to GCS", 500
     return render_template('index.html', extracted_text=None)
@@ -58,6 +61,16 @@ def detect_text_from_gcs(gcs_uri):
         return texts[0].description
     else:
         return "No text found."
+
+def stylize_text_with_gemini(text):
+    """Uses Gemini API to reformat and stylize text into paragraphs."""
+    try:
+        prompt = f"Reformat and stylize the following text into well-structured paragraphs:\n\n{text}"
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        print(f"Error stylizing text with Gemini: {e}")
+        return text # Return original text if Gemini fails
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8080)
