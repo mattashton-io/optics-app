@@ -19,6 +19,7 @@ BUCKET_NAME = "pytutoring-dev-bucket"
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
+    print("beginning index")
     if request.method == 'POST':
         if 'file' not in request.files:
             return redirect(request.url)
@@ -39,6 +40,7 @@ def index():
 
 def upload_to_gcs(file):
     """Uploads a file to Google Cloud Storage."""
+    print("beginning upload_to_gcs")
     try:
         client = storage.Client()
         bucket = client.get_bucket(BUCKET_NAME)
@@ -52,6 +54,7 @@ def upload_to_gcs(file):
 
 def detect_text_from_gcs(gcs_uri):
     """Detects text in the image located in Google Cloud Storage or on the Web."""
+    print("beginning detect_text_from_gcs")
     client = vision.ImageAnnotatorClient()
     image = vision.Image(source=vision.ImageSource(image_uri=gcs_uri))
     response = client.text_detection(image=image)
@@ -64,8 +67,9 @@ def detect_text_from_gcs(gcs_uri):
 
 def stylize_text_with_gemini(text):
     """Uses Gemini API to reformat and stylize text into paragraphs."""
+    print("beginning stylize_text_with_gemini")
     try:
-        prompt = f"Reformat and stylize the following text into well-structured paragraphs:\n\n{text}"
+        prompt = f"Reformat and stylize the following text into well-structured paragraphs, but do not generate filler content or insert new words beyond what is in the provided text:\n\n{text}"
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
