@@ -35,15 +35,16 @@ def index():
             if gcs_path:
                 # Perform OCR
                 extracted_text = detect_text_from_gcs(gcs_path)
-                stylized_text = stylize_text_with_gemini(extracted_text)
                 
                 target_language = request.form.get('language', 'en')
                 if target_language != 'en':
-                    translated_text = translate_text(stylized_text, target_language)
+                    translated_text = translate_text(extracted_text, target_language)
                 else:
-                    translated_text = stylized_text
+                    translated_text = extracted_text
 
-                return render_template('index.html', extracted_text=translated_text)
+                stylized_text = stylize_text_with_gemini(translated_text)
+
+                return render_template('index.html', extracted_text=stylized_text)
             else:
                 return "Error uploading file to GCS", 500
     return render_template('index.html', extracted_text=None)
