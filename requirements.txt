@@ -1,5 +1,6 @@
-Flask==2.3.3
-google-cloud-storage==2.14.0
-google-cloud-vision==3.4.0
+Flask
+google-cloud-storage
+google-cloud-vision
 google-generativeai
-google-cloud-translate==3.11.0
+google-cloud-translate
+google-cloud-secret-manager

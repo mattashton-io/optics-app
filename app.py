@@ -1,15 +1,22 @@
 import os
 from flask import Flask, request, render_template, redirect, url_for
 from google.cloud import storage, vision, translate_v2 as translate
+from google.cloud import secretmanager
 import uuid
 import google.generativeai as genai
 
 app = Flask(__name__)
 
+# Function to access secret from Secret Manager
+def access_secret_version(secret_version_name):
+    client = secretmanager.SecretManagerServiceClient()
+    response = client.access_secret_version(name=secret_version_name)
+    return response.payload.data.decode('UTF-8')
+
 # Configure Gemini API
-# Replace with your actual API key
-genai.configure(api_key=os.environ["YOUR_GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-2.5-flash')
+gemini_api_key = access_secret_version("projects/396631018769/secrets/optics-app-gemini/versions/latest")
+genai.configure(api_key=gemini_api_key)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 # Configure Google Cloud Storage
 # Replace with your actual bucket name
