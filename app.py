@@ -1,6 +1,6 @@
 import os
 from flask import Flask, request, render_template, redirect, url_for
-from google.cloud import storage, vision
+from google.cloud import storage, vision, translate_v2 as translate
 import uuid
 import google.generativeai as genai
 
@@ -16,6 +16,9 @@ model = genai.GenerativeModel('gemini-2.5-flash')
 BUCKET_NAME = "pytutoring-dev-bucket" 
 # Ensure GOOGLE_APPLICATION_CREDENTIALS environment variable is set
 # or provide credentials explicitly.
+
+# Configure Google Cloud Translate
+translate_client = translate.Client()
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -33,7 +36,14 @@ def index():
                 # Perform OCR
                 extracted_text = detect_text_from_gcs(gcs_path)
                 stylized_text = stylize_text_with_gemini(extracted_text)
-                return render_template('index.html', extracted_text=stylized_text)
+                
+                target_language = request.form.get('language', 'en')
+                if target_language != 'en':
+                    translated_text = translate_text(stylized_text, target_language)
+                else:
+                    translated_text = stylized_text
+
+                return render_template('index.html', extracted_text=translated_text)
             else:
                 return "Error uploading file to GCS", 500
     return render_template('index.html', extracted_text=None)
@@ -75,6 +85,16 @@ def stylize_text_with_gemini(text):
     except Exception as e:
         print(f"Error stylizing text with Gemini: {e}")
         return text # Return original text if Gemini fails
+
+def translate_text(text, target_language):
+    """Translates text into the target language."""
+    print(f"Translating to {target_language}")
+    try:
+        result = translate_client.translate(text, target_language=target_language)
+        return result['translatedText']
+    except Exception as e:
+        print(f"Error translating text: {e}")
+        return text
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8080)
