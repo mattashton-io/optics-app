@@ -1,6 +1,6 @@
 import os
-from flask import Flask, request, render_template, redirect, url_for
-from google.cloud import storage, vision, translate_v2 as translate
+from flask import Flask, request, render_template, redirect, url_for, send_from_directory
+from google.cloud import storage, vision, translate_v2 as translate, texttospeech
 from google.cloud import secretmanager
 import uuid
 import google.generativeai as genai
@@ -27,6 +27,9 @@ BUCKET_NAME = "pytutoring-dev-bucket"
 # Configure Google Cloud Translate
 translate_client = translate.Client()
 
+# Configure Google Cloud Text-to-Speech
+tts_client = texttospeech.TextToSpeechClient()
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     print("beginning index")
@@ -50,11 +53,12 @@ def index():
                     translated_text = extracted_text
 
                 stylized_text = stylize_text_with_gemini(translated_text)
+                audio_file_path = text_to_speech(stylized_text, target_language)
 
-                return render_template('index.html', extracted_text=stylized_text)
+                return render_template('index.html', extracted_text=stylized_text, audio_file=audio_file_path)
             else:
                 return "Error uploading file to GCS", 500
-    return render_template('index.html', extracted_text=None)
+    return render_template('index.html', extracted_text=None, audio_file=None)
 
 def upload_to_gcs(file):
     """Uploads a file to Google Cloud Storage."""
@@ -103,6 +107,55 @@ def translate_text(text, target_language):
     except Exception as e:
         print(f"Error translating text: {e}")
         return text
+
+def text_to_speech(text, language_code):
+    """Synthesizes speech from text."""
+    print("Synthesizing speech")
+    # Truncate text to avoid exceeding API limits
+    truncated_text = text[:4500]
+    synthesis_input = texttospeech.SynthesisInput(text=truncated_text)
+    
+    # Adjust voice based on language
+    if language_code.startswith('en'):
+        voice_name = 'en-US-Wavenet-D'
+    elif language_code.startswith('es'):
+        voice_name = 'es-ES-Wavenet-B'
+    elif language_code.startswith('ru'):
+        voice_name = 'ru-RU-Wavenet-A'
+    elif language_code.startswith('zh'):
+        voice_name = 'cmn-CN-Wavenet-A'
+    elif language_code.startswith('fa'):
+        voice_name = 'fa-IR-Wavenet-A'
+    elif language_code.startswith('sw'):
+        voice_name = 'sw-KE-Wavenet-A'
+    elif language_code.startswith('hi'):
+        voice_name = 'hi-IN-Wavenet-A'
+    elif language_code.startswith('fr'):
+        voice_name = 'fr-FR-Wavenet-A'
+    else:
+        voice_name = 'en-US-Wavenet-D' # Default
+
+    voice = texttospeech.VoiceSelectionParams(
+        language_code=language_code, name=voice_name
+    )
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3
+    )
+    response = tts_client.synthesize_speech(
+        input=synthesis_input, voice=voice, audio_config=audio_config
+    )
+    
+    audio_filename = f"output-{uuid.uuid4()}.mp3"
+    audio_filepath = os.path.join("optics-app/static", audio_filename)
+    with open(audio_filepath, "wb") as out:
+        out.write(response.audio_content)
+        print(f'Audio content written to file "{audio_filepath}"')
+
+    return audio_filename
+
+@app.route('/static/<filename>')
+def static_files(filename):
+    return send_from_directory('static', filename)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8080)
