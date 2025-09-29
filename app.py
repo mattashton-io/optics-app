@@ -16,7 +16,7 @@ def access_secret_version(secret_version_name):
 # Configure Gemini API
 gemini_api_key = access_secret_version("projects/396631018769/secrets/optics-app-gemini/versions/latest")
 genai.configure(api_key=gemini_api_key)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-2.5-pro')
 
 # Configure Google Cloud Storage
 # Replace with your actual bucket name
@@ -145,8 +145,9 @@ def text_to_speech(text, language_code):
         input=synthesis_input, voice=voice, audio_config=audio_config
     )
     
+    print("os.getcwd = ", os.getcwd())
     audio_filename = f"output-{uuid.uuid4()}.mp3"
-    audio_filepath = os.path.join("optics-app/static", audio_filename)
+    audio_filepath = os.path.join("/usr/local/google/home/mattashton/Documents/pyTutoring/optics-app/static", audio_filename)
     with open(audio_filepath, "wb") as out:
         out.write(response.audio_content)
         print(f'Audio content written to file "{audio_filepath}"')
