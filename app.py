@@ -29,6 +29,18 @@ translate_client = translate.Client()
 
 # Configure Google Cloud Text-to-Speech
 tts_client = texttospeech.TextToSpeechClient()
+voices = tts_client.list_voices()
+supported_languages_for_tts = {lang for voice in voices.voices for lang in voice.language_codes}
+
+#print("voices: ", voices)
+print("supported languaged dict:", supported_languages_for_tts)
+
+#filtering languages to what is actually used in the app
+scoped_languages = []
+for lang in supported_languages_for_tts:
+    scoped_languages.append(lang[-2:].lower())
+scoped_languages += ["zh-CN"]
+print("scoped languages: ", scoped_languages)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -111,6 +123,10 @@ def translate_text(text, target_language):
 def text_to_speech(text, language_code):
     """Synthesizes speech from text."""
     print("Synthesizing speech")
+    
+    if language_code not in scoped_languages:
+        return "Language not supported for audio playback."
+
     # Truncate text to avoid exceeding API limits
     truncated_text = text[:4500]
     synthesis_input = texttospeech.SynthesisInput(text=truncated_text)
@@ -141,9 +157,13 @@ def text_to_speech(text, language_code):
     audio_config = texttospeech.AudioConfig(
         audio_encoding=texttospeech.AudioEncoding.MP3
     )
-    response = tts_client.synthesize_speech(
-        input=synthesis_input, voice=voice, audio_config=audio_config
-    )
+    try:
+        response = tts_client.synthesize_speech(
+            input=synthesis_input, voice=voice, audio_config=audio_config
+        )
+    except Exception as e:
+        print(f"Error synthesizing speech: {e}")
+        return "Error generating audio."
     
     print("os.getcwd = ", os.getcwd())
     audio_filename = f"output-{uuid.uuid4()}.mp3"
