@@ -21,6 +21,7 @@ model = genai.GenerativeModel('gemini-2.5-pro')
 # Configure Google Cloud Storage
 # Replace with your actual bucket name
 BUCKET_NAME = "pytutoring-dev-bucket" 
+STATIC_DIR = "/usr/local/google/home/mattashton/Documents/pyTutoring/optics-app/static"
 # Ensure GOOGLE_APPLICATION_CREDENTIALS environment variable is set
 # or provide credentials explicitly.
 
@@ -39,7 +40,7 @@ print("supported languaged dict:", supported_languages_for_tts)
 scoped_languages = []
 for lang in supported_languages_for_tts:
     scoped_languages.append(lang[-2:].lower())
-scoped_languages += ["zh-CN"]
+scoped_languages += ["zh-CN", "en"]
 print("scoped languages: ", scoped_languages)
 
 @app.route('/', methods=['GET', 'POST'])
@@ -124,6 +125,7 @@ def text_to_speech(text, language_code):
     """Synthesizes speech from text."""
     print("Synthesizing speech")
     
+    print("language code: ", language_code)
     if language_code not in scoped_languages:
         return "Language not supported for audio playback."
 
@@ -165,9 +167,13 @@ def text_to_speech(text, language_code):
         print(f"Error synthesizing speech: {e}")
         return "Error generating audio."
     
+    #print current working dir + create naming convention for generated audio files
     print("os.getcwd = ", os.getcwd())
     audio_filename = f"output-{uuid.uuid4()}.mp3"
-    audio_filepath = os.path.join("/usr/local/google/home/mattashton/Documents/pyTutoring/optics-app/static", audio_filename)
+
+    #Create folder to store generated audio
+    os.system(f"mkdir -p {STATIC_DIR}")
+    audio_filepath = os.path.join(STATIC_DIR, audio_filename)
     with open(audio_filepath, "wb") as out:
         out.write(response.audio_content)
         print(f'Audio content written to file "{audio_filepath}"')
