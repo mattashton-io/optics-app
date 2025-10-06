@@ -20,10 +20,10 @@
 <body class="bg-gray-900 text-gray-100">
     <div class="container mx-auto mt-10 p-6 bg-gray-800 rounded-xl shadow-lg max-w-2xl">
         <h1 class="text-3xl font-bold text-center text-blue-400 mb-6">Image OCR with Google Cloud Vision API</h1>
-        <form method="POST" enctype="multipart/form-data" class="flex flex-col gap-4 mb-6">
-            <input type="file" name="file" accept="image/*" class="p-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500 file:text-white hover:file:bg-blue-600">
+        <form id="upload-form" class="flex flex-col gap-4 mb-6">
+            <input type="file" name="file" id="file-input" accept="image/*" class="p-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500 file:text-white hover:file:bg-blue-600">
             <div class="flex gap-4">
-                <select name="language" class="p-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100 flex-grow">
+                <select name="language" id="language-select" class="p-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100 flex-grow">
                     <option value="en">English</option>
                     <option value="es">Spanish</option>
                     <option value="ru">Russian</option>
@@ -37,25 +37,127 @@
             </div>
         </form>
 
-        {% if extracted_text %}
-        <div class="result-section mt-6 pt-6 border-t border-gray-700">
-            <h2 class="text-2xl font-semibold text-blue-400 mb-4">Extracted Text:</h2>
-            <p class="extracted-text bg-gray-700 p-4 rounded-lg whitespace-pre-wrap break-words">{{ extracted_text }}</p>
-            {% if audio_file %}
-                {% if "Language not supported" in audio_file or "Error generating audio" in audio_file %}
-                    <p class="text-red-400 mt-4">{{ audio_file }}</p>
-                {% else %}
-                    <div class="audio-section mt-4">
-                        <h3 class="text-xl font-semibold text-blue-400 mb-2">Listen to the Text:</h3>
-                        <audio controls class="w-full">
-                            <source src="{{ url_for('static', filename=audio_file) }}" type="audio/mpeg">
-                            Your browser does not support the audio element.
-                        </audio>
-                    </div>
-                {% endif %}
-            {% endif %}
+        <div id="progress-container" class="w-full bg-gray-700 rounded-full h-6 hidden">
+            <div id="progress-bar" class="bg-blue-600 h-6 text-xs font-medium text-blue-100 text-center p-0.5 leading-none rounded-full" style="width: 0%">0%</div>
         </div>
-        {% endif %}
+
+        <div id="result-section" class="result-section mt-6 pt-6 border-t border-gray-700 hidden">
+            <h2 class="text-2xl font-semibold text-blue-400 mb-4">Extracted Text:</h2>
+            <p id="extracted-text" class="extracted-text bg-gray-700 p-4 rounded-lg whitespace-pre-wrap break-words"></p>
+            <div id="audio-section" class="audio-section mt-4 hidden">
+                <h3 class="text-xl font-semibold text-blue-400 mb-2">Listen to the Text:</h3>
+                <audio id="audio-player" controls class="w-full">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+        </div>
     </div>
+
+    <script>
+        document.getElementById('upload-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const fileInput = document.getElementById('file-input');
+            const languageSelect = document.getElementById('language-select');
+            const progressBar = document.getElementById('progress-bar');
+            const progressContainer = document.getElementById('progress-container');
+            const resultSection = document.getElementById('result-section');
+            const extractedTextElem = document.getElementById('extracted-text');
+            const audioSection = document.getElementById('audio-section');
+            const audioPlayer = document.getElementById('audio-player');
+
+            if (fileInput.files.length === 0) {
+                alert('Please select a file.');
+                return;
+            }
+
+            progressContainer.classList.remove('hidden');
+            resultSection.classList.add('hidden');
+            audioSection.classList.add('hidden');
+            progressBar.style.width = '0%';
+            progressBar.textContent = '0%';
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                // Step 1: OCR
+                updateProgress(25, 'Running OCR...');
+                let response = await fetch('/ocr', {
+                    method: 'POST',
+                    body: formData
+                });
+                let data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'OCR failed');
+                let text = data.text;
+
+                // Step 2: Translate
+                updateProgress(50, 'Translating...');
+                const lang = languageSelect.value;
+                response = await fetch('/translate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text, language: lang })
+                });
+                data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Translation failed');
+                text = data.text;
+
+                // Step 3: Stylize
+                updateProgress(75, 'Stylizing...');
+                response = await fetch('/stylize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Stylization failed');
+                text = data.text;
+                extractedTextElem.textContent = text;
+
+                // Step 4: Synthesize Speech
+                updateProgress(100, 'Synthesizing speech...');
+                response = await fetch('/synthesize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text, language: lang })
+                });
+                data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Speech synthesis failed');
+                
+                progressBar.textContent = 'Complete!';
+                resultSection.classList.remove('hidden');
+
+                if (data.audio_file && !data.audio_file.includes("not supported") && !data.audio_file.includes("Error")) {
+                    const audioSource = document.createElement('source');
+                    audioSource.src = `/static/${data.audio_file}`;
+                    audioSource.type = 'audio/mpeg';
+                    audioPlayer.innerHTML = '';
+                    audioPlayer.appendChild(audioSource);
+                    audioPlayer.load();
+                    audioSection.classList.remove('hidden');
+                } else if (data.audio_file) {
+                    const errorPara = document.createElement('p');
+                    errorPara.className = 'text-red-400 mt-4';
+                    errorPara.textContent = data.audio_file;
+                    audioSection.innerHTML = '';
+                    audioSection.appendChild(errorPara);
+                    audioSection.classList.remove('hidden');
+                }
+
+
+            } catch (error) {
+                progressBar.style.backgroundColor = 'red';
+                progressBar.textContent = `Error: ${error.message}`;
+                console.error('Processing failed:', error);
+            }
+        });
+
+        function updateProgress(percent, text) {
+            const progressBar = document.getElementById('progress-bar');
+            progressBar.style.width = `${percent}%`;
+            progressBar.textContent = text || `${percent}%`;
+        }
+    </script>
 </body>
 </html>

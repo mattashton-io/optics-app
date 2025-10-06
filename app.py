@@ -43,35 +43,58 @@ for lang in supported_languages_for_tts:
 scoped_languages += ["zh-CN", "en"]
 print("scoped languages: ", scoped_languages)
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/', methods=['GET'])
 def index():
-    print("beginning index")
-    if request.method == 'POST':
-        if 'file' not in request.files:
-            return redirect(request.url)
-        file = request.files['file']
-        if file.filename == '':
-            return redirect(request.url)
-        if file:
-            # Upload image to GCS
-            gcs_path = upload_to_gcs(file)
-            if gcs_path:
-                # Perform OCR
-                extracted_text = detect_text_from_gcs(gcs_path)
-                
-                target_language = request.form.get('language', 'en')
-                if target_language != 'en':
-                    translated_text = translate_text(extracted_text, target_language)
-                else:
-                    translated_text = extracted_text
+    return render_template('index.html')
 
-                stylized_text = stylize_text_with_gemini(translated_text)
-                audio_file_path = text_to_speech(stylized_text, target_language)
+@app.route('/ocr', methods=['POST'])
+def ocr():
+    if 'file' not in request.files:
+        return {"error": "No file part"}, 400
+    file = request.files['file']
+    if file.filename == '':
+        return {"error": "No selected file"}, 400
+    if file:
+        gcs_path = upload_to_gcs(file)
+        if gcs_path:
+            text = detect_text_from_gcs(gcs_path)
+            return {"text": text}
+        else:
+            return {"error": "Error uploading file to GCS"}, 500
+    return {"error": "File processing error"}, 500
 
-                return render_template('index.html', extracted_text=stylized_text, audio_file=audio_file_path)
-            else:
-                return "Error uploading file to GCS", 500
-    return render_template('index.html', extracted_text=None, audio_file=None)
+@app.route('/translate', methods=['POST'])
+def translate():
+    data = request.get_json()
+    text = data.get('text')
+    language = data.get('language')
+    if not text or not language:
+        return {"error": "Missing text or language"}, 400
+    
+    if language != 'en':
+        translated_text = translate_text(text, language)
+    else:
+        translated_text = text
+    return {"text": translated_text}
+
+@app.route('/stylize', methods=['POST'])
+def stylize():
+    data = request.get_json()
+    text = data.get('text')
+    if not text:
+        return {"error": "Missing text"}, 400
+    stylized_text = stylize_text_with_gemini(text)
+    return {"text": stylized_text}
+
+@app.route('/synthesize', methods=['POST'])
+def synthesize():
+    data = request.get_json()
+    text = data.get('text')
+    language = data.get('language')
+    if not text or not language:
+        return {"error": "Missing text or language"}, 400
+    audio_file_path = text_to_speech(text, language)
+    return {"audio_file": audio_file_path}
 
 def upload_to_gcs(file):
     """Uploads a file to Google Cloud Storage."""
