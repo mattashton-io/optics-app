@@ -4,6 +4,10 @@ from google.cloud import storage, vision, translate_v2 as translate, texttospeec
 from google.cloud import secretmanager
 import uuid
 import google.generativeai as genai
+import matplotlib.pyplot as plt
+from collections import Counter
+import io
+import base64
 
 app = Flask(__name__)
 
@@ -95,6 +99,48 @@ def synthesize():
         return {"error": "Missing text or language"}, 400
     audio_file_path = text_to_speech(text, language)
     return {"audio_file": audio_file_path}
+
+@app.route('/plot', methods=['POST'])
+def plot():
+    data = request.get_json()
+    text = data.get('text')
+    if not text:
+        return {"error": "Missing text"}, 400
+    
+    # Generate plot
+    try:
+        # Simple word count
+        words = text.lower().split()
+        word_counts = Counter(words)
+        most_common_words = word_counts.most_common(15)
+
+        if not most_common_words:
+            return {"plot_url": None}
+
+        labels, values = zip(*most_common_words)
+
+        fig, ax = plt.subplots(figsize=(10, 8))
+        ax.barh(labels, values, color='skyblue')
+        ax.set_xlabel('Frequency')
+        ax.set_title('Top 15 Most Common Words')
+        plt.gca().invert_yaxis()
+        plt.tight_layout()
+
+        # Save plot to a bytes buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        
+        plot_filename = f"plot-{uuid.uuid4()}.png"
+        plot_filepath = os.path.join(STATIC_DIR, plot_filename)
+        with open(plot_filepath, "wb") as out:
+            out.write(buf.read())
+
+        return {"plot_url": url_for('static', filename=plot_filename)}
+    except Exception as e:
+        print(f"Error generating plot: {e}")
+        return {"error": "Failed to generate plot"}, 500
+
 
 def upload_to_gcs(file):
     """Uploads a file to Google Cloud Storage."""

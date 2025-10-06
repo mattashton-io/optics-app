@@ -5,3 +5,4 @@ google-generativeai
 google-cloud-translate
 google-cloud-secret-manager
 google-cloud-texttospeech
+matplotlib

@@ -50,6 +50,10 @@
                     Your browser does not support the audio element.
                 </audio>
             </div>
+            <div id="plot-section" class="plot-section mt-4 hidden">
+                <h3 class="text-xl font-semibold text-blue-400 mb-2">Word Frequency:</h3>
+                <img id="plot-image" src="" alt="Word Frequency Plot" class="w-full rounded-lg">
+            </div>
         </div>
     </div>
 
@@ -65,6 +69,8 @@
             const extractedTextElem = document.getElementById('extracted-text');
             const audioSection = document.getElementById('audio-section');
             const audioPlayer = document.getElementById('audio-player');
+            const plotSection = document.getElementById('plot-section');
+            const plotImage = document.getElementById('plot-image');
 
             if (fileInput.files.length === 0) {
                 alert('Please select a file.');
@@ -74,6 +80,7 @@
             progressContainer.classList.remove('hidden');
             resultSection.classList.add('hidden');
             audioSection.classList.add('hidden');
+            plotSection.classList.add('hidden');
             progressBar.style.width = '0%';
             progressBar.textContent = '0%';
 
@@ -82,7 +89,7 @@
 
             try {
                 // Step 1: OCR
-                updateProgress(25, 'Running OCR...');
+                updateProgress(20, 'Running OCR...');
                 let response = await fetch('/ocr', {
                     method: 'POST',
                     body: formData
@@ -92,7 +99,7 @@
                 let text = data.text;
 
                 // Step 2: Translate
-                updateProgress(50, 'Translating...');
+                updateProgress(40, 'Translating...');
                 const lang = languageSelect.value;
                 response = await fetch('/translate', {
                     method: 'POST',
@@ -104,7 +111,7 @@
                 text = data.text;
 
                 // Step 3: Stylize
-                updateProgress(75, 'Stylizing...');
+                updateProgress(60, 'Stylizing...');
                 response = await fetch('/stylize', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -116,33 +123,49 @@
                 extractedTextElem.textContent = text;
 
                 // Step 4: Synthesize Speech
-                updateProgress(100, 'Synthesizing speech...');
+                updateProgress(80, 'Synthesizing speech...');
                 response = await fetch('/synthesize', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text: text, language: lang })
                 });
-                data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Speech synthesis failed');
+                let audioData = await response.json();
+                if (!response.ok) throw new Error(audioData.error || 'Speech synthesis failed');
+
+                // Step 5: Generate Plot
+                updateProgress(100, 'Generating plot...');
+                response = await fetch('/plot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                let plotData = await response.json();
+                if (!response.ok) throw new Error(plotData.error || 'Plot generation failed');
+
                 
                 progressBar.textContent = 'Complete!';
                 resultSection.classList.remove('hidden');
 
-                if (data.audio_file && !data.audio_file.includes("not supported") && !data.audio_file.includes("Error")) {
+                if (audioData.audio_file && !audioData.audio_file.includes("not supported") && !audioData.audio_file.includes("Error")) {
                     const audioSource = document.createElement('source');
-                    audioSource.src = `/static/${data.audio_file}`;
+                    audioSource.src = `/static/${audioData.audio_file}`;
                     audioSource.type = 'audio/mpeg';
                     audioPlayer.innerHTML = '';
                     audioPlayer.appendChild(audioSource);
                     audioPlayer.load();
                     audioSection.classList.remove('hidden');
-                } else if (data.audio_file) {
+                } else if (audioData.audio_file) {
                     const errorPara = document.createElement('p');
                     errorPara.className = 'text-red-400 mt-4';
-                    errorPara.textContent = data.audio_file;
+                    errorPara.textContent = audioData.audio_file;
                     audioSection.innerHTML = '';
                     audioSection.appendChild(errorPara);
                     audioSection.classList.remove('hidden');
+                }
+
+                if (plotData.plot_url) {
+                    plotImage.src = plotData.plot_url;
+                    plotSection.classList.remove('hidden');
                 }
 
 
