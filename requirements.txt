@@ -1,8 +1,9 @@
 Flask
 google-cloud-storage
 google-cloud-vision
-google-generativeai
+requests
 google-cloud-translate
 google-cloud-secret-manager
 google-cloud-texttospeech
 matplotlib
+google-generativeai

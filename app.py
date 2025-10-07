@@ -3,7 +3,7 @@ from flask import Flask, request, render_template, redirect, url_for, send_from_
 from google.cloud import storage, vision, translate_v2 as translate, texttospeech
 from google.cloud import secretmanager
 import uuid
-import google.generativeai as genai
+import requests
 import matplotlib.pyplot as plt
 from collections import Counter
 import io
@@ -15,7 +15,6 @@ from functools import wraps
 # Replace with your actual bucket name
 BUCKET_NAME = "optics-app-uploads" 
 STATIC_DIR  = "/usr/local/google/home/mattashton/Documents/pyTutoring/optics-app/static"
-MODEL_ID    = "gemini-2.5-pro"
 # Ensure GOOGLE_APPLICATION_CREDENTIALS environment variable is set
 # or provide credentials explicitly.
 
@@ -35,19 +34,6 @@ def time_profile(f):
 # init Flask app
 app = Flask(__name__)
 
-# Function to access secret from Secret Manager
-def access_secret_version(secret_version_name):
-    start_time_fun = time.time()
-    client = secretmanager.SecretManagerServiceClient()
-    response = client.access_secret_version(name=secret_version_name)
-    print("time from app start to access_secret_version: ", start_time_fun - start_time)
-    print("time elapsed for access_secret_version: ", time.time() - start_time_fun)
-    return response.payload.data.decode('UTF-8')
-
-# Configure Gemini API
-gemini_api_key = access_secret_version("projects/396631018769/secrets/optics-app-gemini/versions/latest")
-genai.configure(api_key=gemini_api_key)
-model = genai.GenerativeModel(MODEL_ID)
 
 # Configure Google Cloud Translate
 translate_client = translate.Client()
@@ -193,15 +179,24 @@ def detect_text_from_gcs(gcs_uri):
 
 @time_profile
 def stylize_text_with_gemini(text):
-    """Uses Gemini API to reformat and stylize text into paragraphs."""
-    print("beginning stylize_text_with_gemini")
+    """Uses local model to reformat and stylize text into paragraphs."""
+    print("beginning stylize_text_with_local_model")
     try:
         prompt = f"Reformat and stylize the following text into well-structured paragraphs, but do not generate filler content or insert new words beyond what is in the provided text:\n\n{text}"
-        response = model.generate_content(prompt)
-        return response.text
+        # Assuming the local model has a similar API to OpenAI's completion
+        # and is running on localhost:45565
+        response = requests.post("http://localhost:45565/v1/completions", json={
+            "model": "local-model", # model name is often required
+            "prompt": prompt,
+            "max_tokens": 500,
+            "temperature": 0.7
+        })
+        response.raise_for_status()
+        # Assuming the response format is similar to OpenAI's
+        return response.json()['choices'][0]['text'].strip()
     except Exception as e:
-        print(f"Error stylizing text with Gemini: {e}")
-        return text # Return original text if Gemini fails
+        print(f"Error stylizing text with local model: {e}")
+        return text # Return original text if it fails
 
 @time_profile
 def translate_text(text, target_language):
