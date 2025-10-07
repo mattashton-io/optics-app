@@ -8,26 +8,46 @@ import matplotlib.pyplot as plt
 from collections import Counter
 import io
 import base64
+import time
+from functools import wraps
 
+# Configure Google Cloud Storage
+# Replace with your actual bucket name
+BUCKET_NAME = "optics-app-uploads" 
+STATIC_DIR  = "/usr/local/google/home/mattashton/Documents/pyTutoring/optics-app/static"
+MODEL_ID    = "gemini-2.5-pro"
+# Ensure GOOGLE_APPLICATION_CREDENTIALS environment variable is set
+# or provide credentials explicitly.
+
+# Check system clock for time (miliseconds) since the UNIX epoch (1/1/1970)
+start_time = time.time()
+
+def time_profile(f):
+    @wraps(f)
+    def wrap(*args, **kw):
+        ts = time.time()
+        result = f(*args, **kw)
+        te = time.time()
+        print('func:%r took: %2.4f sec' % \
+          (f.__name__, te-ts))
+        return result
+    return wrap
+# init Flask app
 app = Flask(__name__)
 
 # Function to access secret from Secret Manager
 def access_secret_version(secret_version_name):
+    start_time_fun = time.time()
     client = secretmanager.SecretManagerServiceClient()
     response = client.access_secret_version(name=secret_version_name)
+    print("time from app start to access_secret_version: ", start_time_fun - start_time)
+    print("time elapsed for access_secret_version: ", time.time() - start_time_fun)
     return response.payload.data.decode('UTF-8')
 
 # Configure Gemini API
 gemini_api_key = access_secret_version("projects/396631018769/secrets/optics-app-gemini/versions/latest")
 genai.configure(api_key=gemini_api_key)
-model = genai.GenerativeModel('gemini-2.5-pro')
-
-# Configure Google Cloud Storage
-# Replace with your actual bucket name
-BUCKET_NAME = "pytutoring-dev-bucket" 
-STATIC_DIR = "/usr/local/google/home/mattashton/Documents/pyTutoring/optics-app/static"
-# Ensure GOOGLE_APPLICATION_CREDENTIALS environment variable is set
-# or provide credentials explicitly.
+model = genai.GenerativeModel(MODEL_ID)
 
 # Configure Google Cloud Translate
 translate_client = translate.Client()
@@ -142,6 +162,7 @@ def plot():
         return {"error": "Failed to generate plot"}, 500
 
 
+@time_profile
 def upload_to_gcs(file):
     """Uploads a file to Google Cloud Storage."""
     print("beginning upload_to_gcs")
@@ -156,6 +177,7 @@ def upload_to_gcs(file):
         print(f"Error uploading to GCS: {e}")
         return None
 
+@time_profile
 def detect_text_from_gcs(gcs_uri):
     """Detects text in the image located in Google Cloud Storage or on the Web."""
     print("beginning detect_text_from_gcs")
@@ -169,6 +191,7 @@ def detect_text_from_gcs(gcs_uri):
     else:
         return "No text found."
 
+@time_profile
 def stylize_text_with_gemini(text):
     """Uses Gemini API to reformat and stylize text into paragraphs."""
     print("beginning stylize_text_with_gemini")
@@ -180,6 +203,7 @@ def stylize_text_with_gemini(text):
         print(f"Error stylizing text with Gemini: {e}")
         return text # Return original text if Gemini fails
 
+@time_profile
 def translate_text(text, target_language):
     """Translates text into the target language."""
     print(f"Translating to {target_language}")
@@ -190,6 +214,7 @@ def translate_text(text, target_language):
         print(f"Error translating text: {e}")
         return text
 
+@time_profile
 def text_to_speech(text, language_code):
     """Synthesizes speech from text."""
     print("Synthesizing speech")
