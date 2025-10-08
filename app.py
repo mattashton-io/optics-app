@@ -182,18 +182,18 @@ def stylize_text_with_gemini(text):
     """Uses local model to reformat and stylize text into paragraphs."""
     print("beginning stylize_text_with_local_model")
     try:
-        prompt = f"Reformat and stylize the following text into well-structured paragraphs, but do not generate filler content or insert new words beyond what is in the provided text:\n\n{text}"
+        prompt = f"Reformat and stylize the following text into well-structured paragraphs, but do not generate filler content or insert new words beyond what is in the provided text:\n\n{text[:10]}"
+        print(prompt)
         # Assuming the local model has a similar API to OpenAI's completion
-        # and is running on localhost:45565
-        response = requests.post("http://localhost:45565/v1/completions", json={
-            "model": "local-model", # model name is often required
+        # and is running on localhost:11434
+        response = requests.post("http://localhost:11434/api/generate", json={
+            "model": "gemma3n:e4b", # model name is often required
             "prompt": prompt,
-            "max_tokens": 500,
-            "temperature": 0.7
+            "stream": False
         })
         response.raise_for_status()
         # Assuming the response format is similar to OpenAI's
-        return response.json()['choices'][0]['text'].strip()
+        return response.json()['response'].strip()
     except Exception as e:
         print(f"Error stylizing text with local model: {e}")
         return text # Return original text if it fails
