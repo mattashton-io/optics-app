@@ -226,26 +226,38 @@ def detect_text_from_gcs(gcs_uri):
     else:
         return "No text found."
 
+# @time_profile
+# def stylize_text_with_gemini(text):
+#     """Uses local model to reformat and stylize text into paragraphs."""
+#     print("beginning stylize_text_with_local_model")
+#     try:
+#         prompt = f"Reformat and stylize the following text into well-structured paragraphs, but do not generate filler content or insert new words beyond what is in the provided text:\n\n{text[:10]}"
+#         print(prompt)
+#         # Assuming the local model has a similar API to OpenAI's completion
+#         # and is running on localhost:11434
+#         response = requests.post("http://localhost:11434/api/generate", json={
+#             "model": "gemma3n:e4b", # model name is often required
+#             "prompt": prompt,
+#             "stream": False
+#         })
+#         response.raise_for_status()
+#         # Assuming the response format is similar to OpenAI's
+#         return response.json()['response'].strip()
+#     except Exception as e:
+#         print(f"Error stylizing text with local model: {e}")
+#         return text # Return original text if it fails
+
 @time_profile
 def stylize_text_with_gemini(text):
-    """Uses local model to reformat and stylize text into paragraphs."""
-    print("beginning stylize_text_with_local_model")
+    """Uses Gemini API to reformat and stylize text into paragraphs."""
+    print("beginning stylize_text_with_gemini")
     try:
-        prompt = f"Reformat and stylize the following text into well-structured paragraphs, but do not generate filler content or insert new words beyond what is in the provided text:\n\n{text[:10]}"
-        print(prompt)
-        # Assuming the local model has a similar API to OpenAI's completion
-        # and is running on localhost:11434
-        response = requests.post("http://localhost:11434/api/generate", json={
-            "model": "gemma3n:e4b", # model name is often required
-            "prompt": prompt,
-            "stream": False
-        })
-        response.raise_for_status()
-        # Assuming the response format is similar to OpenAI's
-        return response.json()['response'].strip()
+        prompt = f"Reformat and stylize the following text into well-structured paragraphs, but do not generate filler content or insert new words beyond what is in the provided text:\n\n{text}"
+        response = model.generate_content(prompt)
+        return response.text
     except Exception as e:
-        print(f"Error stylizing text with local model: {e}")
-        return text # Return original text if it fails
+        print(f"Error stylizing text with Gemini: {e}")
+        return text # Return original text if Gemini fails
 
 @time_profile
 def translate_text(text, target_language):
