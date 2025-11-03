@@ -98,12 +98,27 @@ def stylize():
 
 @app.route('/synthesize', methods=['POST'])
 def synthesize():
-    data = request.get_json()
-    text = data.get('text')
-    language = data.get('language')
+    text = request.form.get('text')
+    language = request.form.get('language')
+
     if not text or not language:
         return {"error": "Missing text or language"}, 400
-    audio_file_path = text_to_speech(text, language)
+
+    if 'audio_file' in request.files and request.files['audio_file'].filename != '':
+        audio_file = request.files['audio_file']
+        # Save the uploaded audio file temporarily
+        temp_audio_filename = f"temp-{uuid.uuid4()}.wav"
+        temp_audio_filepath = os.path.join(STATIC_DIR, temp_audio_filename)
+        audio_file.save(temp_audio_filepath)
+        
+        audio_file_path = text_to_speech_with_reference(text, temp_audio_filepath)
+        os.remove(temp_audio_filepath) # Clean up temp file
+    else:
+        audio_file_path = text_to_speech(text, language)
+        
+    if "Error" in audio_file_path:
+        return {"error": audio_file_path}, 500
+
     return {"audio_file": audio_file_path}
 
 @app.route('/plot', methods=['POST'])
@@ -146,6 +161,40 @@ def plot():
     except Exception as e:
         print(f"Error generating plot: {e}")
         return {"error": "Failed to generate plot"}, 500
+
+@app.route('/mimic-audio', methods=['POST'])
+def mimic_audio():
+    if 'audio_file' not in request.files:
+        return {"error": "No audio file part"}, 400
+    
+    audio_file = request.files['audio_file']
+    text_to_speak = request.form.get('text')
+
+    if audio_file.filename == '':
+        return {"error": "No selected audio file"}, 400
+    if not text_to_speak:
+        return {"error": "No text provided for speech synthesis"}, 400
+
+    try:
+        # Save the uploaded audio file temporarily
+        temp_audio_filename = f"temp-{uuid.uuid4()}.wav"
+        temp_audio_filepath = os.path.join(STATIC_DIR, temp_audio_filename)
+        audio_file.save(temp_audio_filepath)
+
+        # Synthesize speech using the uploaded audio as a reference
+        output_audio_filename = text_to_speech_with_reference(text_to_speak, temp_audio_filepath)
+
+        # Clean up the temporary file
+        os.remove(temp_audio_filepath)
+
+        if "Error" in output_audio_filename:
+            return {"error": output_audio_filename}, 500
+
+        return {"audio_file": output_audio_filename}
+
+    except Exception as e:
+        print(f"Error in audio mimicry process: {e}")
+        return {"error": "Failed to process audio mimicry"}, 500
 
 
 @time_profile
@@ -262,6 +311,50 @@ def text_to_speech(text, language_code):
 
     #Create folder to store generated audio
     os.system(f"mkdir -p {STATIC_DIR}")
+    audio_filepath = os.path.join(STATIC_DIR, audio_filename)
+    with open(audio_filepath, "wb") as out:
+        out.write(response.audio_content)
+        print(f'Audio content written to file "{audio_filepath}"')
+
+    return audio_filename
+
+def text_to_speech_with_reference(text, reference_audio_path):
+    """Synthesizes speech from text, using a reference audio for voice cloning with Chirp."""
+    print("Synthesizing speech with reference audio using Chirp")
+    
+    client = texttospeech.TextToSpeechClient()
+
+    with open(reference_audio_path, "rb") as audio_file:
+        input_audio_bytes = audio_file.read()
+
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+    
+    # The reference audio is provided in the SynthesizeSpeechRequest
+    request = texttospeech.SynthesizeSpeechRequest(
+        input=synthesis_input,
+        voice=texttospeech.VoiceSelectionParams(
+            # The language code and name are not needed when using a reference audio for cloning
+            # but the API may still require a placeholder. Let's use a generic one.
+            language_code="en-US", 
+            name="en-US-Standard-A" 
+        ),
+        audio_config=texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3
+        ),
+        # This is where you include the reference audio for voice cloning
+        model="chirp",
+        voice_config=texttospeech.VoiceConfig(
+            reference_audio=input_audio_bytes
+        )
+    )
+
+    try:
+        response = client.synthesize_speech(request=request)
+    except Exception as e:
+        print(f"Error synthesizing speech with reference: {e}")
+        return f"Error generating audio: {e}"
+
+    audio_filename = f"mimic-output-{uuid.uuid4()}.mp3"
     audio_filepath = os.path.join(STATIC_DIR, audio_filename)
     with open(audio_filepath, "wb") as out:
         out.write(response.audio_content)
