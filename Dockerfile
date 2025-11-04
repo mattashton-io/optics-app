@@ -1,6 +1,7 @@
 # Base image (e.g., python:3.13-slim)
 FROM python:3.13-slim
 
+COPY templates .
 # # 1. Install system-level C compilers
 # RUN apt-get update && apt-get install -y build-essential
 

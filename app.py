@@ -14,7 +14,9 @@ from functools import wraps
 # Configure Google Cloud Storage
 # Replace with your actual bucket name
 BUCKET_NAME = "optics-app-uploads" 
-STATIC_DIR  = "/usr/local/google/home/mattashton/Documents/pyTutoring/optics-app/static"
+STATIC_DIR  = "static"
+os.system(f"mkdir -p {STATIC_DIR}")
+
 # Ensure GOOGLE_APPLICATION_CREDENTIALS environment variable is set
 # or provide credentials explicitly.
 
