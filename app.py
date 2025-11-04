@@ -331,8 +331,8 @@ def text_to_speech(text, language_code):
     return audio_filename
 
 def text_to_speech_with_reference(text, reference_audio_path):
-    """Synthesizes speech from text, using a reference audio for voice cloning with Chirp."""
-    print("Synthesizing speech with reference audio using Chirp")
+    """Synthesizes speech from text, using a reference audio for voice cloning with Chirp v3."""
+    print("Synthesizing speech with reference audio using Chirp v3")
     
     client = texttospeech.TextToSpeechClient()
 
@@ -345,16 +345,13 @@ def text_to_speech_with_reference(text, reference_audio_path):
     request = texttospeech.SynthesizeSpeechRequest(
         input=synthesis_input,
         voice=texttospeech.VoiceSelectionParams(
-            # The language code and name are not needed when using a reference audio for cloning
-            # but the API may still require a placeholder. Let's use a generic one.
             language_code="en-US", 
             name="en-US-Standard-A" 
         ),
         audio_config=texttospeech.AudioConfig(
             audio_encoding=texttospeech.AudioEncoding.MP3
         ),
-        # This is where you include the reference audio for voice cloning
-        model="chirp",
+        model="chirp-v3", # Use chirp-v3 for instant voice cloning
         voice_config=texttospeech.VoiceConfig(
             reference_audio=input_audio_bytes
         )
