@@ -64,10 +64,10 @@
                     Your browser does not support the audio element.
                 </audio>
             </div>
-            <div id="plot-section" class="plot-section mt-4 hidden">
+            <!-- <div id="plot-section" class="plot-section mt-4 hidden">
                 <h3 class="text-xl font-semibold text-blue-400 mb-2">Word Frequency:</h3>
                 <img id="plot-image" src="" alt="Word Frequency Plot" class="w-full rounded-lg">
-            </div>
+            </div> -->
         </div>
     </div>
 
@@ -104,8 +104,8 @@
             const extractedTextElem = document.getElementById('extracted-text');
             const audioSection = document.getElementById('audio-section');
             const audioPlayer = document.getElementById('audio-player');
-            const plotSection = document.getElementById('plot-section');
-            const plotImage = document.getElementById('plot-image');
+            // const plotSection = document.getElementById('plot-section');
+            // const plotImage = document.getElementById('plot-image');
 
             if (fileInput.files.length === 0) {
                 alert('Please select a file.');
@@ -115,7 +115,7 @@
             progressContainer.classList.remove('hidden');
             resultSection.classList.add('hidden');
             audioSection.classList.add('hidden');
-            plotSection.classList.add('hidden');
+            // plotSection.classList.add('hidden');
             progressBar.style.width = '0%';
             progressBar.textContent = '0%';
 
@@ -178,14 +178,14 @@
                 if (!response.ok) throw new Error(audioData.error || 'Speech synthesis failed');
 
                 // Step 5: Generate Plot
-                updateProgress(100, 'Generating plot...');
-                response = await fetch('/plot', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: text })
-                });
-                let plotData = await response.json();
-                if (!response.ok) throw new Error(plotData.error || 'Plot generation failed');
+                updateProgress(100, 'Completing synthesis...');
+                // response = await fetch('/plot', {
+                //     method: 'POST',
+                //     headers: { 'Content-Type': 'application/json' },
+                //     body: JSON.stringify({ text: text })
+                // });
+                // let plotData = await response.json();
+                // if (!response.ok) throw new Error(plotData.error || 'Plot generation failed');
 
                 
                 progressBar.textContent = 'Complete!';
@@ -208,10 +208,10 @@
                     audioSection.classList.remove('hidden');
                 }
 
-                if (plotData.plot_url) {
-                    plotImage.src = plotData.plot_url;
-                    plotSection.classList.remove('hidden');
-                }
+                // if (plotData.plot_url) {
+                //     plotImage.src = plotData.plot_url;
+                //     plotSection.classList.remove('hidden');
+                // }
 
 
             } catch (error) {

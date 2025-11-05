@@ -15,8 +15,8 @@ RUN ls templates
 # RUN pip install --upgrade pip setuptools wheel
 
 # 3. Copy and install your app's requirements
-COPY requirements-with-versions.txt .
-RUN pip install -r requirements-with-versions.txt
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 
 # Copy the rest of your app and define the run command
 COPY app.py .
