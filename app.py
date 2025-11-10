@@ -10,12 +10,132 @@ import io
 import base64
 import time
 from functools import wraps
+import gradio as gr
+import numpy as np
+import requests
+import json
+import google.auth
+import google.auth.transport.requests
+
 
 # Configure Google Cloud Storage
 # Replace with your actual bucket name
 BUCKET_NAME = "optics-app-uploads" 
 STATIC_DIR  = "static"
 os.system(f"mkdir -p {STATIC_DIR}")
+
+##import project for Chirp integration
+PROJECT_ID = "pytutoring-dev"  # @param {type: "string", placeholder: "[your-project-id]", isTemplate: true}
+if not PROJECT_ID or PROJECT_ID == "[your-project-id]":
+    PROJECT_ID = str(os.environ.get("GOOGLE_CLOUD_PROJECT"))
+
+#Setting API endpoint (global vs. other)
+TTS_LOCATION = "global"
+if TTS_LOCATION != "global":
+    API_ENDPOINT = f"{TTS_LOCATION}-texttospeech.googleapis.com"
+else:
+    API_ENDPOINT = "texttospeech.googleapis.com"
+
+
+# Setting Google Auth Credentials
+credentials, _ = google.auth.default()
+authentication = google.auth.transport.requests.Request()
+credentials.refresh(authentication)
+
+ACCESS_TOKEN = credentials.token
+
+
+
+#Creating custom voice with sample and consent audio
+def create_instant_custom_voice_key(
+    reference_audio_bytes: bytes, consent_audio_bytes: bytes, audio_encoding: str
+) -> str:
+    """Creates a temporary custom voice key"""
+
+    url = f"https://{API_ENDPOINT}/v1beta1/voices:generateVoiceCloningKey"
+
+    request_body = {
+        "reference_audio": {
+            "audio_config": {"audio_encoding": audio_encoding, "sample_rate_hertz": 24000},
+            "content": reference_audio_bytes,
+        },
+        "voice_talent_consent": {
+            "audio_config": {"audio_encoding": audio_encoding, "sample_rate_hertz": 24000},
+            "content": consent_audio_bytes,
+        },
+        "consent_script": "I am the owner of this voice and I consent to Google using this voice to create a synthetic voice model.",
+        "language_code": "en-US",
+    }
+
+    response = None
+    try:
+        headers = {
+            "Authorization": f"Bearer {ACCESS_TOKEN}",
+            "x-goog-user-project": PROJECT_ID,
+            "Content-Type": "application/json; charset=utf-8",
+        }
+
+        response = requests.post(url, headers=headers, json=request_body)
+        response.raise_for_status()
+
+        response_json = response.json()
+        return response_json.get("voiceCloningKey")
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error making API request: {e}")
+        if response is not None and response.text:
+            print("Response error message:")
+            print(response.text)
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON response: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+
+#encode consent and sample audio files to base64
+def wav_to_base64(file_path: str) -> str:
+    """Convert a WAV file to base64 encoded string"""
+    try:
+        with open(file_path, "rb") as audio_file:
+            encoded_string = base64.b64encode(audio_file.read()).decode("utf-8")
+            return encoded_string
+    except FileNotFoundError:
+        print(f"Error: File not found at {file_path}")
+        return None
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+
+## Creating custom voice with Chirp 3
+def create_voice(
+    reference_audio: gr.Audio,
+    consent_audio: gr.Audio,
+    progress: gr.Progress | None = None,
+) -> str:
+    """Create a custom voice using reference and consent audio"""
+    if reference_audio is None or consent_audio is None:
+        return "Please upload both reference and consent audio files."
+
+    if not progress:
+        progress = gr.Progress()
+
+    progress(0.2, desc="Processing audio files...")
+    reference_audio_b64 = wav_to_base64(reference_audio)
+    consent_audio_b64 = wav_to_base64(consent_audio)
+
+    if reference_audio_b64 is None or consent_audio_b64 is None:
+        return "Error processing audio files."
+
+    progress(0.5, desc="Creating voice clone...")
+    voice_key = create_instant_custom_voice_key(reference_audio_b64, consent_audio_b64)
+
+    if voice_key:
+        progress(1.0, desc="Voice created successfully!")
+        return voice_key
+    else:
+        return "Failed to create voice. Check the logs for details."
+    
 
 # Ensure GOOGLE_APPLICATION_CREDENTIALS environment variable is set
 # or provide credentials explicitly.
