@@ -6,3 +6,4 @@ google-cloud-translate
 google-cloud-secret-manager
 google-cloud-texttospeech
 google-generativeai
+gradio

@@ -68,13 +68,14 @@ def create_instant_custom_voice_key(
     }
 
     response = None
-    try:
-        headers = {
-            "Authorization": f"Bearer {ACCESS_TOKEN}",
-            "x-goog-user-project": PROJECT_ID,
-            "Content-Type": "application/json; charset=utf-8",
-        }
 
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "x-goog-user-project": PROJECT_ID,
+        "Content-Type": "application/json; charset=utf-8",
+    } 
+
+    try:
         response = requests.post(url, headers=headers, json=request_body)
         response.raise_for_status()
 
@@ -86,10 +87,55 @@ def create_instant_custom_voice_key(
         if response is not None and response.text:
             print("Response error message:")
             print(response.text)
+    # except json.JSONDecodeError as e:
+    #     print(f"Error decoding JSON response: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+
+def synthesize_text_with_cloned_voice(voice_key: str, text: str, audio_encoding: str) -> None:
+    """Synthesizes text with the cloned voice"""
+
+    url = f"https://{API_ENDPOINT}/v1beta1/text:synthesize"
+
+    request_body = {
+        "input": {"text": text},
+        "voice": {
+            "language_code": "en-US",
+            "voice_clone": {
+                "voice_cloning_key": voice_key,
+            },
+        },
+        "audioConfig": {"audio_encoding": audio_encoding, "sample_rate_hertz": 24000},
+    }
+
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "x-goog-user-project": PROJECT_ID,
+        "Content-Type": "application/json; charset=utf-8",
+    }
+
+
+    try:
+        response = requests.post(url, headers=headers, json=request_body)
+        response.raise_for_status()
+
+        response_json = response.json()
+        audio_content = response_json.get("audioContent")
+
+        if audio_content:
+            return base64.b64decode(audio_content)
+        else:
+            print("Error: Audio content not found in the response.")
+            print(response_json)
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error making API request: {e}")
     except json.JSONDecodeError as e:
         print(f"Error decoding JSON response: {e}")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
+
 
 
 #encode consent and sample audio files to base64
@@ -136,6 +182,57 @@ def create_voice(
     else:
         return "Failed to create voice. Check the logs for details."
     
+
+def generate_speech(
+    voice_key: str, text: str, audio_encoding: str, progress: gr.Progress | None = None, 
+) -> tuple:
+    """Generate speech using the cloned voice"""
+    if not voice_key or not text:
+        return None, "Please create a voice key and enter text to synthesize."
+
+    if not progress:
+        progress = gr.Progress()
+
+    progress(0.3, desc="Generating speech...")
+
+    try:
+        url = f"https://{API_ENDPOINT}/v1beta1/text:synthesize"
+
+        request_body = {
+            "input": {"text": text},
+            "voice": {
+                "language_code": "en-US",
+                "voice_clone": {
+                    "voice_cloning_key": voice_key,
+                },
+            },
+            "audioConfig": {"audio_encoding": audio_encoding, "sample_rate_hertz": 24000},
+        }
+
+        headers = {
+            "Authorization": f"Bearer {ACCESS_TOKEN}",
+            "x-goog-user-project": PROJECT_ID,
+            "Content-Type": "application/json; charset=utf-8",
+        }
+
+        progress(0.6, desc="Processing audio...")``
+        response = requests.post(url, headers=headers, json=request_body)
+        response.raise_for_status()
+
+        response_json = response.json()
+        audio_content = response_json.get("audioContent")
+
+        if audio_content:
+            progress(1.0, desc="Speech generated!")
+            audio_bytes = base64.b64decode(audio_content)
+            audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
+            return (24000, audio_array), "Speech generated successfully!"
+        else:
+            return None, "Error: Audio content not found in the response."
+
+    except Exception as e:
+        return None, f"Error generating speech: {str(e)}"
+
 
 # Ensure GOOGLE_APPLICATION_CREDENTIALS environment variable is set
 # or provide credentials explicitly.
