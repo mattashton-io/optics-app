@@ -195,27 +195,28 @@ def generate_speech(
 
     progress(0.3, desc="Generating speech...")
 
-    try:
-        url = f"https://{API_ENDPOINT}/v1beta1/text:synthesize"
+    url = f"https://{API_ENDPOINT}/v1beta1/text:synthesize"
 
-        request_body = {
-            "input": {"text": text},
-            "voice": {
-                "language_code": "en-US",
-                "voice_clone": {
-                    "voice_cloning_key": voice_key,
-                },
+    request_body = {
+        "input": {"text": text},
+        "voice": {
+            "language_code": "en-US",
+            "voice_clone": {
+                "voice_cloning_key": voice_key,
             },
-            "audioConfig": {"audio_encoding": audio_encoding, "sample_rate_hertz": 24000},
-        }
+        },
+        "audioConfig": {"audio_encoding": audio_encoding, "sample_rate_hertz": 24000},
+    }
 
-        headers = {
-            "Authorization": f"Bearer {ACCESS_TOKEN}",
-            "x-goog-user-project": PROJECT_ID,
-            "Content-Type": "application/json; charset=utf-8",
-        }
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "x-goog-user-project": PROJECT_ID,
+        "Content-Type": "application/json; charset=utf-8",
+    }
 
-        progress(0.6, desc="Processing audio...")``
+    try:
+
+        progress(0.6, desc="Processing audio...")
         response = requests.post(url, headers=headers, json=request_body)
         response.raise_for_status()
 
