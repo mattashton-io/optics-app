@@ -1,21 +1,11 @@
 import os
-from flask import Flask, request, render_template, redirect, url_for, send_from_directory
+from flask import Flask, request, render_template, send_from_directory
 from google.cloud import storage, vision, translate_v2 as translate, texttospeech
 from google.cloud import secretmanager
+import google.generativeai as genai
 import uuid
-import requests
-# import matplotlib.pyplot as plt
-from collections import Counter
-import io
-import base64
 import time
 from functools import wraps
-import gradio as gr
-import numpy as np
-import requests
-import json
-import google.auth
-import google.auth.transport.requests
 
 
 # Configure Google Cloud Storage
@@ -23,217 +13,6 @@ import google.auth.transport.requests
 BUCKET_NAME = "optics-app-uploads" 
 STATIC_DIR  = "static"
 os.system(f"mkdir -p {STATIC_DIR}")
-
-##import project for Chirp integration
-PROJECT_ID = "pytutoring-dev"  # @param {type: "string", placeholder: "[your-project-id]", isTemplate: true}
-if not PROJECT_ID or PROJECT_ID == "[your-project-id]":
-    PROJECT_ID = str(os.environ.get("GOOGLE_CLOUD_PROJECT"))
-
-#Setting API endpoint (global vs. other)
-TTS_LOCATION = "global"
-if TTS_LOCATION != "global":
-    API_ENDPOINT = f"{TTS_LOCATION}-texttospeech.googleapis.com"
-else:
-    API_ENDPOINT = "texttospeech.googleapis.com"
-
-
-# Setting Google Auth Credentials
-credentials, _ = google.auth.default()
-authentication = google.auth.transport.requests.Request()
-credentials.refresh(authentication)
-
-ACCESS_TOKEN = credentials.token
-
-
-
-#Creating custom voice with sample and consent audio
-def create_instant_custom_voice_key(
-    reference_audio_bytes: bytes, consent_audio_bytes: bytes, audio_encoding: str
-) -> str:
-    """Creates a temporary custom voice key"""
-
-    url = f"https://{API_ENDPOINT}/v1beta1/voices:generateVoiceCloningKey"
-
-    request_body = {
-        "reference_audio": {
-            "audio_config": {"audio_encoding": audio_encoding, "sample_rate_hertz": 24000},
-            "content": reference_audio_bytes,
-        },
-        "voice_talent_consent": {
-            "audio_config": {"audio_encoding": audio_encoding, "sample_rate_hertz": 24000},
-            "content": consent_audio_bytes,
-        },
-        "consent_script": "I am the owner of this voice and I consent to Google using this voice to create a synthetic voice model.",
-        "language_code": "en-US",
-    }
-
-    response = None
-
-    headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
-        "x-goog-user-project": PROJECT_ID,
-        "Content-Type": "application/json; charset=utf-8",
-    } 
-
-    try:
-        response = requests.post(url, headers=headers, json=request_body)
-        response.raise_for_status()
-
-        response_json = response.json()
-        return response_json.get("voiceCloningKey")
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error making API request: {e}")
-        if response is not None and response.text:
-            print("Response error message:")
-            print(response.text)
-    # except json.JSONDecodeError as e:
-    #     print(f"Error decoding JSON response: {e}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
-
-def synthesize_text_with_cloned_voice(voice_key: str, text: str, audio_encoding: str) -> None:
-    """Synthesizes text with the cloned voice"""
-
-    url = f"https://{API_ENDPOINT}/v1beta1/text:synthesize"
-
-    request_body = {
-        "input": {"text": text},
-        "voice": {
-            "language_code": "en-US",
-            "voice_clone": {
-                "voice_cloning_key": voice_key,
-            },
-        },
-        "audioConfig": {"audio_encoding": audio_encoding, "sample_rate_hertz": 24000},
-    }
-
-    headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
-        "x-goog-user-project": PROJECT_ID,
-        "Content-Type": "application/json; charset=utf-8",
-    }
-
-
-    try:
-        response = requests.post(url, headers=headers, json=request_body)
-        response.raise_for_status()
-
-        response_json = response.json()
-        audio_content = response_json.get("audioContent")
-
-        if audio_content:
-            return base64.b64decode(audio_content)
-        else:
-            print("Error: Audio content not found in the response.")
-            print(response_json)
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error making API request: {e}")
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON response: {e}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
-
-
-#encode consent and sample audio files to base64
-def wav_to_base64(file_path: str) -> str:
-    """Convert a WAV file to base64 encoded string"""
-    try:
-        with open(file_path, "rb") as audio_file:
-            encoded_string = base64.b64encode(audio_file.read()).decode("utf-8")
-            return encoded_string
-    except FileNotFoundError:
-        print(f"Error: File not found at {file_path}")
-        return None
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return None
-
-
-## Creating custom voice with Chirp 3
-def create_voice(
-    reference_audio: gr.Audio,
-    consent_audio: gr.Audio,
-    progress: gr.Progress | None = None,
-) -> str:
-    """Create a custom voice using reference and consent audio"""
-    if reference_audio is None or consent_audio is None:
-        return "Please upload both reference and consent audio files."
-
-    if not progress:
-        progress = gr.Progress()
-
-    progress(0.2, desc="Processing audio files...")
-    reference_audio_b64 = wav_to_base64(reference_audio)
-    consent_audio_b64 = wav_to_base64(consent_audio)
-
-    if reference_audio_b64 is None or consent_audio_b64 is None:
-        return "Error processing audio files."
-
-    progress(0.5, desc="Creating voice clone...")
-    voice_key = create_instant_custom_voice_key(reference_audio_b64, consent_audio_b64)
-
-    if voice_key:
-        progress(1.0, desc="Voice created successfully!")
-        return voice_key
-    else:
-        return "Failed to create voice. Check the logs for details."
-    
-
-def generate_speech(
-    voice_key: str, text: str, audio_encoding: str, progress: gr.Progress | None = None, 
-) -> tuple:
-    """Generate speech using the cloned voice"""
-    if not voice_key or not text:
-        return None, "Please create a voice key and enter text to synthesize."
-
-    if not progress:
-        progress = gr.Progress()
-
-    progress(0.3, desc="Generating speech...")
-
-    url = f"https://{API_ENDPOINT}/v1beta1/text:synthesize"
-
-    request_body = {
-        "input": {"text": text},
-        "voice": {
-            "language_code": "en-US",
-            "voice_clone": {
-                "voice_cloning_key": voice_key,
-            },
-        },
-        "audioConfig": {"audio_encoding": audio_encoding, "sample_rate_hertz": 24000},
-    }
-
-    headers = {
-        "Authorization": f"Bearer {ACCESS_TOKEN}",
-        "x-goog-user-project": PROJECT_ID,
-        "Content-Type": "application/json; charset=utf-8",
-    }
-
-    try:
-
-        progress(0.6, desc="Processing audio...")
-        response = requests.post(url, headers=headers, json=request_body)
-        response.raise_for_status()
-
-        response_json = response.json()
-        audio_content = response_json.get("audioContent")
-
-        if audio_content:
-            progress(1.0, desc="Speech generated!")
-            audio_bytes = base64.b64decode(audio_content)
-            audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
-            return (24000, audio_array), "Speech generated successfully!"
-        else:
-            return None, "Error: Audio content not found in the response."
-
-    except Exception as e:
-        return None, f"Error generating speech: {str(e)}"
-
 
 # Ensure GOOGLE_APPLICATION_CREDENTIALS environment variable is set
 # or provide credentials explicitly.
@@ -318,23 +97,14 @@ def stylize():
 
 @app.route('/synthesize', methods=['POST'])
 def synthesize():
-    text = request.form.get('text')
-    language = request.form.get('language')
+    data = request.get_json()
+    text = data.get('text')
+    language = data.get('language')
 
     if not text or not language:
         return {"error": "Missing text or language"}, 400
 
-    if 'audio_file' in request.files and request.files['audio_file'].filename != '':
-        audio_file = request.files['audio_file']
-        # Save the uploaded audio file temporarily
-        temp_audio_filename = f"temp-{uuid.uuid4()}.wav"
-        temp_audio_filepath = os.path.join(STATIC_DIR, temp_audio_filename)
-        audio_file.save(temp_audio_filepath)
-        
-        audio_file_path = text_to_speech_with_reference(text, temp_audio_filepath)
-        os.remove(temp_audio_filepath) # Clean up temp file
-    else:
-        audio_file_path = text_to_speech(text, language)
+    audio_file_path = text_to_speech(text, language)
         
     if "Error" in audio_file_path:
         return {"error": audio_file_path}, 500
@@ -381,41 +151,6 @@ def synthesize():
 #     except Exception as e:
 #         print(f"Error generating plot: {e}")
 #         return {"error": "Failed to generate plot"}, 500
-
-@app.route('/mimic-audio', methods=['POST'])
-def mimic_audio():
-    if 'audio_file' not in request.files:
-        return {"error": "No audio file part"}, 400
-    
-    audio_file = request.files['audio_file']
-    text_to_speak = request.form.get('text')
-
-    if audio_file.filename == '':
-        return {"error": "No selected audio file"}, 400
-    if not text_to_speak:
-        return {"error": "No text provided for speech synthesis"}, 400
-
-    try:
-        # Save the uploaded audio file temporarily
-        temp_audio_filename = f"temp-{uuid.uuid4()}.wav"
-        temp_audio_filepath = os.path.join(STATIC_DIR, temp_audio_filename)
-        audio_file.save(temp_audio_filepath)
-
-        # Synthesize speech using the uploaded audio as a reference
-        output_audio_filename = text_to_speech_with_reference(text_to_speak, temp_audio_filepath)
-
-        # Clean up the temporary file
-        os.remove(temp_audio_filepath)
-
-        if "Error" in output_audio_filename:
-            return {"error": output_audio_filename}, 500
-
-        return {"audio_file": output_audio_filename}
-
-    except Exception as e:
-        print(f"Error in audio mimicry process: {e}")
-        return {"error": "Failed to process audio mimicry"}, 500
-
 
 @time_profile
 def upload_to_gcs(file):
@@ -472,6 +207,20 @@ def stylize_text_with_gemini(text):
     """Uses Gemini API to reformat and stylize text into paragraphs."""
     print("beginning stylize_text_with_gemini")
     try:
+        # Create the Secret Manager client.
+        client = secretmanager.SecretManagerServiceClient()
+
+        # Build the resource name of the secret version.
+        name = "projects/396631018769/secrets/optics-app-gemini/versions/latest"
+
+        # Access the secret version.
+        response = client.access_secret_version(request={"name": name})
+
+        # Extract the payload.
+        secret_string = response.payload.data.decode("UTF-8")
+
+        genai.configure(api_key=secret_string)
+        model = genai.GenerativeModel('gemini-3-pro-preview')
         prompt = f"Reformat and stylize the following text into well-structured paragraphs, but do not generate filler content or insert new words beyond what is in the provided text:\n\n{text}"
         response = model.generate_content(prompt)
         return response.text
@@ -550,46 +299,6 @@ def text_to_speech(text, language_code):
 
     return audio_filename
 
-def text_to_speech_with_reference(text, reference_audio_path):
-    """Synthesizes speech from text, using a reference audio for voice cloning with Chirp v3."""
-    print("Synthesizing speech with reference audio using Chirp v3")
-    
-    client = texttospeech.TextToSpeechClient()
-
-    with open(reference_audio_path, "rb") as audio_file:
-        input_audio_bytes = audio_file.read()
-
-    synthesis_input = texttospeech.SynthesisInput(text=text)
-    
-    # The reference audio is provided in the SynthesizeSpeechRequest
-    request = texttospeech.SynthesizeSpeechRequest(
-        input=synthesis_input,
-        voice=texttospeech.VoiceSelectionParams(
-            language_code="en-US", 
-            name="en-US-Standard-A" 
-        ),
-        audio_config=texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3
-        ),
-        model="chirp-v3", # Use chirp-v3 for instant voice cloning
-        voice_config=texttospeech.VoiceConfig(
-            reference_audio=input_audio_bytes
-        )
-    )
-
-    try:
-        response = client.synthesize_speech(request=request)
-    except Exception as e:
-        print(f"Error synthesizing speech with reference: {e}")
-        return f"Error generating audio: {e}"
-
-    audio_filename = f"mimic-output-{uuid.uuid4()}.mp3"
-    audio_filepath = os.path.join(STATIC_DIR, audio_filename)
-    with open(audio_filepath, "wb") as out:
-        out.write(response.audio_content)
-        print(f'Audio content written to file "{audio_filepath}"')
-
-    return audio_filename
 
 @app.route('/static/<filename>')
 def static_files(filename):

@@ -74,7 +74,12 @@
     <div class="container mx-auto mt-10 p-6 bg-gray-800 rounded-xl shadow-lg max-w-2xl">
         <h1 class="text-3xl font-bold text-center text-green-400 mb-6">Audio Mimic with Google Cloud Chirp API</h1>
         <form id="audio-upload-form" class="flex flex-col gap-4 mb-6">
-            <input type="file" name="audio-file" id="audio-file-input-mimic" accept="audio/*" class="p-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-500 file:text-white hover:file:bg-green-600">
+            <label class="block text-sm font-medium text-gray-400">Reference Audio</label>
+            <input type="file" name="audio_file" id="audio-file-input-mimic" accept="audio/*" class="p-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-500 file:text-white hover:file:bg-green-600">
+            
+            <label class="block text-sm font-medium text-gray-400 mt-4">Consent Audio</label>
+            <input type="file" name="consent_audio" id="consent-audio-input" accept="audio/*" class="p-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-500 file:text-white hover:file:bg-orange-600">
+            
             <textarea id="text-input-for-audio" placeholder="Enter text to be spoken by the mimicked voice..." class="p-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100" rows="3"></textarea>
             <button type="submit" class="bg-green-600 text-white py-2 px-4 rounded-full hover:bg-green-700 transition duration-300 text-sm">Upload and Mimic Audio</button>
         </form>
@@ -231,6 +236,7 @@
             event.preventDefault();
 
             const audioFileInput = document.getElementById('audio-file-input-mimic');
+            const consentAudioInput = document.getElementById('consent-audio-input');
             const textInputForAudio = document.getElementById('text-input-for-audio');
             const audioProgressBar = document.getElementById('audio-progress-bar');
             const audioProgressContainer = document.getElementById('audio-progress-container');
@@ -238,7 +244,11 @@
             const generatedAudioPlayer = document.getElementById('generated-audio-player');
 
             if (audioFileInput.files.length === 0) {
-                alert('Please select an audio file.');
+                alert('Please select a reference audio file.');
+                return;
+            }
+            if (consentAudioInput.files.length === 0) {
+                alert('Please select a consent audio file.');
                 return;
             }
             if (textInputForAudio.value.trim() === '') {
@@ -253,6 +263,7 @@
 
             const formData = new FormData();
             formData.append('audio_file', audioFileInput.files[0]);
+            formData.append('consent_audio', consentAudioInput.files[0]);
             formData.append('text', textInputForAudio.value);
 
             try {
