@@ -71,31 +71,6 @@
         </div>
     </div>
 
-    <div class="container mx-auto mt-10 p-6 bg-gray-800 rounded-xl shadow-lg max-w-2xl">
-        <h1 class="text-3xl font-bold text-center text-green-400 mb-6">Audio Mimic with Google Cloud Chirp API</h1>
-        <form id="audio-upload-form" class="flex flex-col gap-4 mb-6">
-            <label class="block text-sm font-medium text-gray-400">Reference Audio</label>
-            <input type="file" name="audio_file" id="audio-file-input-mimic" accept="audio/*" class="p-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-500 file:text-white hover:file:bg-green-600">
-            
-            <label class="block text-sm font-medium text-gray-400 mt-4">Consent Audio</label>
-            <input type="file" name="consent_audio" id="consent-audio-input" accept="audio/*" class="p-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-orange-500 file:text-white hover:file:bg-orange-600">
-            
-            <textarea id="text-input-for-audio" placeholder="Enter text to be spoken by the mimicked voice..." class="p-2 border border-gray-600 rounded-lg bg-gray-700 text-gray-100" rows="3"></textarea>
-            <button type="submit" class="bg-green-600 text-white py-2 px-4 rounded-full hover:bg-green-700 transition duration-300 text-sm">Upload and Mimic Audio</button>
-        </form>
-
-        <div id="audio-progress-container" class="w-full bg-gray-700 rounded-full h-6 hidden">
-            <div id="audio-progress-bar" class="bg-green-600 h-6 text-xs font-medium text-green-100 text-center p-0.5 leading-none rounded-full" style="width: 0%">0%</div>
-        </div>
-
-        <div id="audio-result-section" class="result-section mt-6 pt-6 border-t border-gray-700 hidden">
-            <h2 class="text-2xl font-semibold text-green-400 mb-4">Generated Speech:</h2>
-            <audio id="generated-audio-player" controls class="w-full">
-                Your browser does not support the audio element.
-            </audio>
-        </div>
-    </div>
-
     <script>
         document.getElementById('upload-form').addEventListener('submit', async function(event) {
             event.preventDefault();
@@ -230,81 +205,6 @@
             const progressBar = document.getElementById('progress-bar');
             progressBar.style.width = `${percent}%`;
             progressBar.textContent = text || `${percent}%`;
-        }
-
-        document.getElementById('audio-upload-form').addEventListener('submit', async function(event) {
-            event.preventDefault();
-
-            const audioFileInput = document.getElementById('audio-file-input-mimic');
-            const consentAudioInput = document.getElementById('consent-audio-input');
-            const textInputForAudio = document.getElementById('text-input-for-audio');
-            const audioProgressBar = document.getElementById('audio-progress-bar');
-            const audioProgressContainer = document.getElementById('audio-progress-container');
-            const audioResultSection = document.getElementById('audio-result-section');
-            const generatedAudioPlayer = document.getElementById('generated-audio-player');
-
-            if (audioFileInput.files.length === 0) {
-                alert('Please select a reference audio file.');
-                return;
-            }
-            if (consentAudioInput.files.length === 0) {
-                alert('Please select a consent audio file.');
-                return;
-            }
-            if (textInputForAudio.value.trim() === '') {
-                alert('Please enter the text to be spoken.');
-                return;
-            }
-
-            audioProgressContainer.classList.remove('hidden');
-            audioResultSection.classList.add('hidden');
-            audioProgressBar.style.width = '0%';
-            audioProgressBar.textContent = '0%';
-
-            const formData = new FormData();
-            formData.append('audio_file', audioFileInput.files[0]);
-            formData.append('consent_audio', consentAudioInput.files[0]);
-            formData.append('text', textInputForAudio.value);
-
-            try {
-                updateAudioProgress(50, 'Uploading and processing audio...');
-                const response = await fetch('/mimic-audio', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Audio mimic failed');
-
-                updateAudioProgress(100, 'Complete!');
-                audioResultSection.classList.remove('hidden');
-
-                if (data.audio_file) {
-                    const audioSource = document.createElement('source');
-                    audioSource.src = `/static/${data.audio_file}`;
-                    audioSource.type = 'audio/mpeg';
-                    generatedAudioPlayer.innerHTML = '';
-                    generatedAudioPlayer.appendChild(audioSource);
-                    generatedAudioPlayer.load();
-                } else {
-                     const errorPara = document.createElement('p');
-                    errorPara.className = 'text-red-400 mt-4';
-                    errorPara.textContent = 'Failed to generate audio.';
-                    audioResultSection.innerHTML = '';
-                    audioResultSection.appendChild(errorPara);
-                }
-
-            } catch (error) {
-                audioProgressBar.style.backgroundColor = 'red';
-                audioProgressBar.textContent = `Error: ${error.message}`;
-                console.error('Audio processing failed:', error);
-            }
-        });
-
-        function updateAudioProgress(percent, text) {
-            const audioProgressBar = document.getElementById('audio-progress-bar');
-            audioProgressBar.style.width = `${percent}%`;
-            audioProgressBar.textContent = text || `${percent}%`;
         }
 
         let mediaRecorder;
