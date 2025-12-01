@@ -58,6 +58,7 @@ def index():
 
 @app.route('/ocr', methods=['POST'])
 def ocr():
+    print("ocr route line 61")
     if 'file' not in request.files:
         return {"error": "No file part"}, 400
     file = request.files['file']
@@ -97,15 +98,18 @@ def stylize():
 
 @app.route('/synthesize', methods=['POST'])
 def synthesize():
-    data = request.get_json()
-    text = data.get('text')
-    language = data.get('language')
+    print("begin text synthesis on line 100")
+    text = request.form.get('text')
+    language = request.form.get('language')
 
     if not text or not language:
         return {"error": "Missing text or language"}, 400
-
-    audio_file_path = text_to_speech(text, language)
-        
+    try:
+        audio_file_path = text_to_speech(text, language)
+    except Exception as e:
+        print (e)
+        return {"error": "error in text_to_speech"},400 
+    
     if "Error" in audio_file_path:
         return {"error": audio_file_path}, 500
 
@@ -220,7 +224,7 @@ def stylize_text_with_gemini(text):
         secret_string = response.payload.data.decode("UTF-8")
 
         genai.configure(api_key=secret_string)
-        model = genai.GenerativeModel('gemini-3-pro-preview')
+        model = genai.GenerativeModel('gemini-2.5-flash-lite') #gemini-3-pro-preview
         prompt = f"Reformat and stylize the following text into well-structured paragraphs, but do not generate filler content or insert new words beyond what is in the provided text:\n\n{text}"
         response = model.generate_content(prompt)
         return response.text
