@@ -8,4 +8,6 @@ gcloud run deploy hello-world-service --image YOUR_REGION-docker.pkg.dev/YOUR_PR
 
 
 To-Do:
-- 
+- when language for text-to-speech is receiving too much data (languages like Mandarin and Russian), add proper error reporting and create a graceful dismount
+- do the same in index.html
+- fix Hindi output
